@@ -17,22 +17,111 @@ const WeekSchema = z.object({
 });
 
 const RoadmapSchema = z.array(WeekSchema).min(4).max(4);
+type Roadmap = z.infer<typeof RoadmapSchema>;
 
-function getOpenAI() {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) throw new Error('NVIDIA_API_KEY is not configured');
-
-  return new OpenAI({
-    apiKey,
-    baseURL: 'https://integrate.api.nvidia.com/v1',
-  });
-}
+type ProviderResult = {
+  roadmap: Roadmap;
+  provider: 'nvidia' | 'openrouter';
+  model: string;
+};
 
 function requestIdentity(request: Request, userId?: string) {
   if (userId) return `user:${userId}`;
   const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
   const real = request.headers.get('x-real-ip')?.trim();
   return `ip:${forwarded || real || 'unknown'}`;
+}
+
+function extractRoadmap(content: string): Roadmap {
+  let jsonString = content.trim();
+
+  if (jsonString.includes('```json')) {
+    jsonString = jsonString.split('```json')[1]?.split('```')[0]?.trim() || jsonString;
+  } else if (jsonString.includes('```')) {
+    jsonString = jsonString.split('```')[1]?.split('```')[0]?.trim() || jsonString;
+  }
+
+  return RoadmapSchema.parse(JSON.parse(jsonString));
+}
+
+async function generateWithNvidia(prompt: string): Promise<ProviderResult> {
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey) throw new Error('NVIDIA_API_KEY is not configured');
+
+  const model = process.env.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct';
+  const client = new OpenAI({
+    apiKey,
+    baseURL: 'https://integrate.api.nvidia.com/v1',
+    timeout: 30_000,
+    maxRetries: 1,
+  });
+
+  const completion = await client.chat.completions.create({
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.2,
+    max_tokens: 1024,
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) throw new Error('NVIDIA returned no content');
+
+  return { roadmap: extractRoadmap(content), provider: 'nvidia', model };
+}
+
+async function generateWithOpenRouter(prompt: string): Promise<ProviderResult> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured');
+
+  const model = process.env.OPENROUTER_MODEL || 'openrouter/auto';
+  const siteUrl = process.env.OPENROUTER_SITE_URL;
+  const appName = process.env.OPENROUTER_APP_NAME || 'Skill Swap';
+
+  const defaultHeaders: Record<string, string> = {};
+  if (siteUrl) defaultHeaders['HTTP-Referer'] = siteUrl;
+  if (appName) defaultHeaders['X-Title'] = appName;
+
+  const client = new OpenAI({
+    apiKey,
+    baseURL: 'https://openrouter.ai/api/v1',
+    defaultHeaders,
+    timeout: 30_000,
+    maxRetries: 1,
+  });
+
+  const completion = await client.chat.completions.create({
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.2,
+    max_tokens: 1024,
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) throw new Error('OpenRouter returned no content');
+
+  return { roadmap: extractRoadmap(content), provider: 'openrouter', model };
+}
+
+async function generateRoadmap(prompt: string): Promise<ProviderResult> {
+  const errors: string[] = [];
+
+  try {
+    return await generateWithNvidia(prompt);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    errors.push(`NVIDIA: ${message}`);
+    console.warn('NVIDIA roadmap generation failed; attempting OpenRouter fallback:', message);
+  }
+
+  try {
+    return await generateWithOpenRouter(prompt);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    errors.push(`OpenRouter: ${message}`);
+    console.error('OpenRouter roadmap fallback failed:', message);
+  }
+
+  throw new Error(`All AI providers failed. ${errors.join(' | ')}`);
 }
 
 export async function POST(req: Request) {
@@ -58,16 +147,16 @@ export async function POST(req: Request) {
     }
 
     const normalizedSkill = input.skill.toLowerCase().replace(/\s+/g, ' ').trim();
-    const cacheKey = `skillswap:roadmap:v1:${normalizedSkill}`;
+    const cacheKey = `skillswap:roadmap:v2:${normalizedSkill}`;
     const redis = getRedis();
 
     if (redis) {
       try {
-        const cached = await redis.get<z.infer<typeof RoadmapSchema>>(cacheKey);
+        const cached = await redis.get<Roadmap>(cacheKey);
         if (cached) {
           const validated = RoadmapSchema.parse(cached);
           await persistRoadmap(input.userId, input.skill, validated, 'redis-cache');
-          return NextResponse.json({ roadmap: validated, cached: true });
+          return NextResponse.json({ roadmap: validated, cached: true, provider: 'cache' });
         }
       } catch (cacheError) {
         console.warn('Roadmap cache read failed:', cacheError);
@@ -83,40 +172,33 @@ Each object must match:
   "tasks": ["Task 1", "Task 2", "Task 3"]
 }`;
 
-    const completion = await getOpenAI().chat.completions.create({
-      model: 'meta/llama-3.1-70b-instruct',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.2,
-      max_tokens: 1024,
-    });
-
-    const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error('No content generated');
-
-    let jsonString = content.trim();
-    if (jsonString.includes('```json')) {
-      jsonString = jsonString.split('```json')[1]?.split('```')[0]?.trim() || jsonString;
-    } else if (jsonString.includes('```')) {
-      jsonString = jsonString.split('```')[1]?.split('```')[0]?.trim() || jsonString;
-    }
-
-    const roadmapData = RoadmapSchema.parse(JSON.parse(jsonString));
+    const generated = await generateRoadmap(prompt);
 
     if (redis) {
       try {
-        await redis.set(cacheKey, roadmapData, { ex: 60 * 60 * 24 });
+        await redis.set(cacheKey, generated.roadmap, { ex: 60 * 60 * 24 });
       } catch (cacheError) {
         console.warn('Roadmap cache write failed:', cacheError);
       }
     }
 
-    await persistRoadmap(input.userId, input.skill, roadmapData, 'meta/llama-3.1-70b-instruct');
+    await persistRoadmap(
+      input.userId,
+      input.skill,
+      generated.roadmap,
+      `${generated.provider}:${generated.model}`,
+    );
 
-    return NextResponse.json({ roadmap: roadmapData, cached: false });
+    return NextResponse.json({
+      roadmap: generated.roadmap,
+      cached: false,
+      provider: generated.provider,
+      model: generated.model,
+    });
   } catch (error) {
     console.error('AI Route Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = error instanceof z.ZodError ? 400 : 500;
+    const status = error instanceof z.ZodError ? 400 : 502;
     return NextResponse.json({ error: 'Failed to generate roadmap', details: message }, { status });
   }
 }
@@ -124,7 +206,7 @@ Each object must match:
 async function persistRoadmap(
   userId: string | undefined,
   skill: string,
-  plan: z.infer<typeof RoadmapSchema>,
+  plan: Roadmap,
   model: string,
 ) {
   if (!hasDatabase) return;
