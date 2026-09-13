@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, ShieldAlert, MessageSquare, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { MessageSquare, Mic, MicOff, PhoneOff, ShieldAlert, ShieldCheck, Video, VideoOff, X } from 'lucide-react';
 import Link from 'next/link';
 
 export default function CallPage() {
@@ -14,7 +14,7 @@ export default function CallPage() {
   const [disconnectReason, setDisconnectReason] = useState<string | null>(null);
   const [aiWarning, setAiWarning] = useState(false);
   const [countdown, setCountdown] = useState(5);
-  const [partnerName, setPartnerName] = useState('Connecting...');
+  const [partnerName, setPartnerName] = useState('Connecting…');
   const localVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -27,12 +27,12 @@ export default function CallPage() {
     let stream: MediaStream | null = null;
     if (vidOn && callActive && cameraEnabled) {
       navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then((s) => {
-          stream = s;
-          if (localVideoRef.current) localVideoRef.current.srcObject = s;
-          s.getAudioTracks().forEach((track) => { track.enabled = micOn; });
+        .then((nextStream) => {
+          stream = nextStream;
+          if (localVideoRef.current) localVideoRef.current.srcObject = nextStream;
+          nextStream.getAudioTracks().forEach((track) => { track.enabled = micOn; });
         })
-        .catch((err) => console.error('Webcam error:', err));
+        .catch((error) => console.error('Webcam error:', error));
     }
     return () => stream?.getTracks().forEach((track) => track.stop());
   }, [vidOn, callActive, cameraEnabled, micOn]);
@@ -51,94 +51,110 @@ export default function CallPage() {
       setDisconnectReason('AI_MODERATION_NO_FACE');
       return;
     }
-    const interval = setInterval(() => setCountdown((prev) => prev - 1), 1000);
+    const interval = setInterval(() => setCountdown((value) => value - 1), 1000);
     return () => clearInterval(interval);
   }, [aiWarning, countdown]);
 
   if (!callActive) {
     return (
-      <div className="h-[calc(100vh-140px)] flex flex-col items-center justify-center p-4 text-center">
-        {disconnectReason === 'AI_MODERATION_NO_FACE' ? (
-          <>
-            <div className="h-20 w-20 rounded-full bg-red-100 flex items-center justify-center mb-6 border-4 border-red-500/20">
-              <ShieldAlert className="h-10 w-10 text-red-600 animate-pulse" />
-            </div>
-            <h2 className="text-2xl font-bold tracking-tight text-red-600 mb-2">Disconnected by AI Safety System</h2>
-            <p className="text-slate-500 mb-8 max-w-md mx-auto">The call was terminated because a clear face was not detected in the camera frame. This platform enforces strict identity verification to keep the community safe.</p>
-          </>
-        ) : (
-          <>
-            <div className="h-20 w-20 rounded-full bg-slate-100 flex items-center justify-center mb-6"><PhoneOff className="h-10 w-10 text-slate-500" /></div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900 mb-2">Call Ended</h2>
-            <p className="text-slate-500 mb-8">The session has ended. How was your experience?</p>
-          </>
-        )}
-        <Link href="/dashboard" className="px-6 py-2.5 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-lg">Return to Dashboard</Link>
+      <div className="ss-page ss-page-pad min-h-[calc(100dvh-122px)] lg:min-h-[calc(100dvh-64px)] grid place-items-center">
+        <div className="max-w-md text-center">
+          <span className={`mx-auto h-14 w-14 rounded-full grid place-items-center ${disconnectReason ? 'bg-red-500/10 text-red-500' : 'bg-muted text-muted-foreground'}`}>
+            {disconnectReason ? <ShieldAlert className="h-6 w-6" /> : <PhoneOff className="h-6 w-6" />}
+          </span>
+          <h1 className="mt-5 text-2xl">{disconnectReason ? 'Session stopped for safety.' : 'Call ended.'}</h1>
+          <p className="mt-3 text-sm text-muted-foreground">{disconnectReason ? 'A clear face was not detected during the identity check. Start a new session when your camera framing is ready.' : 'Your session is complete. Progress and feedback can be attached to the session record.'}</p>
+          <Link href="/dashboard" className="ss-button-primary mt-6">Return home</Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-140px)] p-4 md:p-6 max-w-6xl mx-auto flex flex-col gap-4">
+    <div className="ss-page ss-page-pad !pb-2 lg:!pb-6 min-h-[calc(100dvh-122px)] lg:min-h-[calc(100dvh-64px)] flex flex-col gap-3 lg:gap-4">
       {!cameraEnabled && (
-        <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center text-white">
-          <div className="h-20 w-20 bg-slate-800 rounded-full flex items-center justify-center mb-6 border border-slate-700"><Video className="h-10 w-10 text-sky-500" /></div>
-          <h2 className="text-2xl font-bold tracking-tight mb-2">Ready to Join?</h2>
-          <p className="text-slate-400 mb-8 max-w-md text-center text-sm">Skill Swap requires camera access to enforce our zero-proxy safety policy and run identity checks.</p>
-          <button onClick={() => setCameraEnabled(true)} className="px-8 py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-lg transition-colors shadow-lg shadow-sky-500/20">Enable Camera & Join Call</button>
+        <div className="fixed inset-0 z-[120] bg-[#050505] text-white grid place-items-center p-5">
+          <div className="max-w-md text-center">
+            <span className="mx-auto h-16 w-16 ss-chamfer bg-[var(--signal)] text-black grid place-items-center"><Video className="h-7 w-7" /></span>
+            <p className="mt-6 text-[10px] uppercase tracking-[0.16em] text-white/50 font-bold">Video session</p>
+            <h1 className="mt-3 text-3xl text-white">Ready to join?</h1>
+            <p className="mt-3 text-sm text-white/60">Camera access is required for video and identity-safety checks. Your local media starts only after you continue.</p>
+            <button onClick={() => setCameraEnabled(true)} className="ss-button-primary mt-7 min-w-52">Enable camera & join</button>
+          </div>
         </div>
       )}
 
-      <div className="flex-1 grid md:grid-cols-2 gap-4 relative">
-        <div className="relative rounded-2xl bg-slate-900 overflow-hidden shadow-lg border border-slate-900">
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-900"><span className="text-white/20 text-xl font-medium">Waiting for Partner...</span></div>
-          <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-white text-sm font-medium flex items-center gap-2">{partnerName}{partnerName === 'Connecting...' && <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />}</div>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Live session</p>
+          <h1 className="mt-1 text-xl lg:text-2xl">Skill call</h1>
         </div>
-        <div className="relative rounded-2xl bg-slate-900 overflow-hidden shadow-lg border border-slate-900">
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
-            {vidOn ? <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover mirror-mode" /> : <div className="h-24 w-24 rounded-full bg-slate-700 flex items-center justify-center text-3xl font-bold text-slate-500">You</div>}
-          </div>
+        <button onClick={() => setShowCheckIn(true)} className="ss-chip ss-chip-active"><ShieldCheck className="h-3.5 w-3.5" /> Safety check</button>
+      </div>
+
+      <div className="flex-1 min-h-[420px] grid grid-rows-2 md:grid-rows-1 md:grid-cols-2 gap-2 lg:gap-3">
+        <div className="relative overflow-hidden bg-black border border-white/10 rounded-[10px] min-h-[200px]">
+          <div className="absolute inset-0 grid place-items-center text-white/30 text-sm">Waiting for partner…</div>
+          <span className="absolute left-3 bottom-3 bg-black/70 text-white border border-white/10 px-3 py-1.5 rounded-full text-[11px] font-bold inline-flex items-center gap-2">{partnerName}<span className="h-2 w-2 rounded-full bg-[var(--signal)]" /></span>
+        </div>
+
+        <div className="relative overflow-hidden bg-black border border-white/10 rounded-[10px] min-h-[200px]">
+          {vidOn ? (
+            <video ref={localVideoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover mirror-mode" />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center"><span className="h-20 w-20 rounded-full bg-white/10 text-white/40 grid place-items-center text-sm font-bold">You</span></div>
+          )}
+          <span className="absolute left-3 bottom-3 bg-black/70 text-white border border-white/10 px-3 py-1.5 rounded-full text-[11px] font-bold inline-flex items-center gap-2">You {!micOn && <MicOff className="h-3.5 w-3.5 text-red-400" />}</span>
+
           <AnimatePresence>
             {aiWarning && (
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute inset-0 z-40 bg-red-900/40 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center border-[6px] border-red-500 rounded-2xl">
-                <div className="h-16 w-16 bg-red-600 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-red-500/50 animate-pulse"><ShieldAlert className="h-8 w-8 text-white" /></div>
-                <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">AI Moderation Warning</h2>
-                <p className="text-white/90 text-sm max-w-sm mb-6 font-medium">Face not detected. Please look at the camera to verify your identity.</p>
-                <div className="bg-black/50 px-6 py-3 rounded-xl border border-red-500/50 flex items-center gap-4">
-                  <span className="text-4xl font-mono font-bold text-red-500">{countdown}s</span>
-                  <button onClick={() => { setAiWarning(false); setCountdown(5); }} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg shadow-lg">I am here</button>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 bg-red-950/78 p-5 grid place-items-center border-4 border-red-500">
+                <div className="text-center max-w-sm text-white">
+                  <ShieldAlert className="h-8 w-8 mx-auto text-red-400" />
+                  <h2 className="mt-3 text-xl font-black text-white">Face check required</h2>
+                  <p className="mt-2 text-xs text-white/75">Look at the camera to keep the session active.</p>
+                  <div className="mt-5 flex items-center justify-center gap-3">
+                    <span className="text-3xl font-black tabular-nums">{countdown}s</span>
+                    <button onClick={() => { setAiWarning(false); setCountdown(5); }} className="min-h-11 px-4 rounded-[9px] bg-white text-black text-xs font-black">I’m here</button>
+                  </div>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
-          <div className="absolute top-4 right-4"><button onClick={() => setShowCheckIn(true)} className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-slate-700 px-3 py-1.5 rounded-full text-[10px] font-medium text-slate-300 hover:text-white"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Safety Check</button></div>
-          <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-white text-sm font-medium flex items-center gap-2">You{!micOn && <MicOff className="h-3.5 w-3.5 text-rose-500" />}</div>
         </div>
       </div>
 
-      <div className="h-20 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center justify-center gap-4 md:gap-6 px-4">
-        <button onClick={() => setMicOn(!micOn)} className={`h-12 w-12 rounded-full flex items-center justify-center ${micOn ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-600'}`}>{micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}</button>
-        <button onClick={() => setVidOn(!vidOn)} className={`h-12 w-12 rounded-full flex items-center justify-center ${vidOn ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-600'}`}>{vidOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}</button>
-        <button className="h-12 w-12 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center"><MessageSquare className="h-5 w-5" /></button>
-        <div className="w-px h-8 bg-slate-200 mx-2" />
-        <button onClick={() => setCallActive(false)} className="h-12 w-16 md:w-24 rounded-full bg-rose-500 text-white flex items-center justify-center hover:bg-rose-600 shadow-md shadow-rose-500/20"><PhoneOff className="h-5 w-5" /></button>
+      <div className="sticky bottom-[72px] lg:bottom-3 z-30 mx-auto w-fit max-w-full bg-background border ss-hairline rounded-full px-2.5 py-2 flex items-center gap-1.5 shadow-[0_10px_35px_rgba(0,0,0,.16)]">
+        <button onClick={() => setMicOn((value) => !value)} aria-label={micOn ? 'Mute microphone' : 'Unmute microphone'} className={`h-11 w-11 rounded-full grid place-items-center ${micOn ? 'bg-muted' : 'bg-red-500/15 text-red-500'}`}>{micOn ? <Mic className="h-4.5 w-4.5" /> : <MicOff className="h-4.5 w-4.5" />}</button>
+        <button onClick={() => setVidOn((value) => !value)} aria-label={vidOn ? 'Turn camera off' : 'Turn camera on'} className={`h-11 w-11 rounded-full grid place-items-center ${vidOn ? 'bg-muted' : 'bg-red-500/15 text-red-500'}`}>{vidOn ? <Video className="h-4.5 w-4.5" /> : <VideoOff className="h-4.5 w-4.5" />}</button>
+        <button aria-label="Open messages" className="h-11 w-11 rounded-full bg-muted grid place-items-center"><MessageSquare className="h-4.5 w-4.5" /></button>
+        <button onClick={() => setCallActive(false)} aria-label="End call" className="h-11 px-4 rounded-full bg-red-500 text-white grid place-items-center"><PhoneOff className="h-5 w-5" /></button>
       </div>
 
       <AnimatePresence>
         {showCheckIn && (
-          <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed bottom-28 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 z-50">
-            <div className="flex gap-4">
-              <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center shrink-0"><ShieldCheck className="h-5 w-5 text-teal-600" /></div>
-              <div>
-                <h3 className="font-semibold text-slate-900 text-lg">Safety Check-in</h3>
-                <p className="text-sm text-slate-500 mt-1 mb-4">Are you comfortable with how this session is going?</p>
-                <div className="flex gap-2">
-                  <button onClick={() => setShowCheckIn(false)} className="flex-1 py-2 bg-teal-500 text-white rounded-lg text-sm font-medium">Yes, all good</button>
-                  <button onClick={() => { setShowCheckIn(false); setCallActive(false); }} className="flex-1 py-2 bg-rose-50 text-rose-600 rounded-lg text-sm font-medium border border-rose-100"><span className="flex items-center justify-center gap-2"><ShieldAlert className="h-4 w-4" /> End Call</span></button>
+          <>
+            <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCheckIn(false)} className="fixed inset-0 z-[90] bg-black/55" aria-label="Close safety check" />
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              drag="y" dragConstraints={{ top: 0, bottom: 220 }} dragElastic={0.12}
+              onDragEnd={(_, info) => { if (info.offset.y > 90) setShowCheckIn(false); }}
+              className="ss-mobile-sheet sm:left-1/2 sm:right-auto sm:bottom-6 sm:-translate-x-1/2 sm:w-[420px] sm:rounded-[12px] sm:border-b"
+            >
+              <div className="ss-sheet-handle" />
+              <div className="p-5 pt-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Safety</p><h2 className="mt-1 text-xl">Check in</h2></div>
+                  <button onClick={() => setShowCheckIn(false)} className="h-10 w-10 rounded-full grid place-items-center hover:bg-muted"><X className="h-4 w-4" /></button>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">Are you comfortable with how this session is going?</p>
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <button onClick={() => setShowCheckIn(false)} className="ss-button-primary">All good</button>
+                  <button onClick={() => { setShowCheckIn(false); setCallActive(false); }} className="min-h-11 rounded-[9px] border border-red-500/30 text-red-500 text-xs font-bold">End call</button>
                 </div>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
