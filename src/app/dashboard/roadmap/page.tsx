@@ -1,178 +1,130 @@
 'use client';
 
-import { useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { motion } from 'framer-motion';
-import { BookOpen, CheckCircle, Circle, PlayCircle, Trophy, Loader2 } from 'lucide-react';
+import { Check, Circle, Loader2, Map, Play, Sparkles } from 'lucide-react';
 
-interface WeekPlan {
-  week: number;
-  title: string;
-  tasks: string[];
-}
+type WeekPlan = { week: number; title: string; tasks: string[] };
+
+const starterWeeks: WeekPlan[] = [
+  { week: 1, title: 'Foundations of React', tasks: ['Understand Components & JSX', 'Props vs State', 'Build a simple Counter App'] },
+  { week: 2, title: 'Hooks & Side Effects', tasks: ['Master useState', 'Understand useEffect lifecycle', 'Build a Todo List'] },
+  { week: 3, title: 'Advanced State Management', tasks: ['Context API for global state', 'useReducer for complex logic', 'Refactor app state'] },
+  { week: 4, title: 'Final Project Integration', tasks: ['Connect to a REST API', 'Handle loading & errors', 'Deploy to Vercel'] },
+];
 
 export default function RoadmapPage() {
   const { user } = useAuth();
   const [skill, setSkill] = useState('');
-  const [weeks, setWeeks] = useState<WeekPlan[]>([
-    {
-      week: 1,
-      title: 'Foundations of React',
-      tasks: ['Understand Components & JSX', 'Props vs State', 'Build a simple Counter App'],
-    },
-    {
-      week: 2,
-      title: 'Hooks & Side Effects',
-      tasks: ['Mastering useState', 'Understanding useEffect lifecycle', 'Build a Todo List'],
-    },
-    {
-      week: 3,
-      title: 'Advanced State Management',
-      tasks: ['Context API for global state', 'useReducer for complex logic', 'Refactoring'],
-    },
-    {
-      week: 4,
-      title: 'Final Project Integration',
-      tasks: ['Connecting to a REST API', 'Handling Loading & Errors', 'Deploying to Vercel'],
-    },
-  ]);
+  const [weeks, setWeeks] = useState<WeekPlan[]>(starterWeeks);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [provider, setProvider] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!skill.trim()) return;
-
+  const handleGenerate = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!skill.trim() || isGenerating) return;
     setIsGenerating(true);
+    setError(null);
     try {
-      const res = await fetch('/api/roadmap', {
+      const response = await fetch('/api/roadmap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skill, userId: user?.uid }),
       });
-
-      if (!res.ok) throw new Error('Failed to generate roadmap');
-
-      const data = await res.json();
-      if (data.roadmap) {
-        setWeeks(data.roadmap);
-      }
-    } catch (error) {
-      console.error(error);
-      alert('Could not generate roadmap. Ensure your Nvidia API key is valid.');
+      const data = await response.json();
+      if (!response.ok || !data.roadmap) throw new Error(data.error || 'Roadmap generation failed');
+      setWeeks(data.roadmap);
+      setProvider(data.provider || null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not generate roadmap');
     } finally {
       setIsGenerating(false);
     }
   };
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8 space-y-8">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+    <div className="ss-page ss-page-pad space-y-8 lg:space-y-10">
+      <section className="grid lg:grid-cols-[1fr_minmax(360px,520px)] gap-6 lg:gap-10 items-end">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-foreground">Learning Roadmap</h1>
-          <p className="text-sm text-muted-foreground mt-1">AI-generated curriculum powered by Nvidia Llama 3.</p>
+          <p className="text-[10px] uppercase tracking-[0.17em] text-muted-foreground font-bold">AI learning plan</p>
+          <h1 className="mt-3">Build a four-week roadmap.</h1>
+          <p className="mt-3 max-w-xl text-sm text-muted-foreground">NVIDIA generates first. OpenRouter is used automatically when the primary model cannot complete the request.</p>
         </div>
-        
-        <form onSubmit={handleGenerate} className="flex gap-2 w-full sm:w-auto">
-          <input
-            type="text"
-            value={skill}
-            onChange={(e) => setSkill(e.target.value)}
-            placeholder="e.g. Python for Data Science"
-            className="flex-1 sm:w-64 px-4 py-2 text-sm rounded-lg bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all shadow-sm"
-          />
-          <button 
-            type="submit" 
-            disabled={isGenerating || !skill.trim()}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 flex items-center gap-2"
-          >
-            {isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
-            Generate
+        <form onSubmit={handleGenerate} className="flex flex-col sm:flex-row gap-2">
+          <input value={skill} onChange={(event) => setSkill(event.target.value)} placeholder="e.g. Python for data science" className="ss-input flex-1" />
+          <button type="submit" disabled={!skill.trim() || isGenerating} className="ss-button-primary disabled:opacity-50">
+            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {isGenerating ? 'Generating' : 'Generate'}
           </button>
         </form>
-      </motion.div>
+      </section>
 
-      <div className="grid md:grid-cols-3 gap-8">
-        <div className="md:col-span-2 space-y-6">
-          {weeks.map((w, i) => {
-            const status = i === 0 ? 'completed' : i === 1 ? 'current' : 'upcoming';
-            
+      {(provider || error) && (
+        <div className={`min-h-11 px-4 py-3 flex items-center gap-3 border ss-hairline rounded-[9px] text-xs ${error ? 'text-red-500' : 'text-muted-foreground'}`}>
+          <span className={`h-2 w-2 rounded-full ${error ? 'bg-red-500' : 'bg-[var(--signal)]'}`} />
+          {error ? error : `Roadmap generated via ${provider}`}
+        </div>
+      )}
+
+      <section className="grid xl:grid-cols-[1fr_280px] gap-8 lg:gap-12">
+        <div className="border-t ss-hairline">
+          {weeks.map((week, index) => {
+            const state = index === 0 ? 'done' : index === 1 ? 'current' : 'upcoming';
             return (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className={`relative p-6 rounded-2xl border ${status === 'current' ? 'bg-card border-teal-500 shadow-lg shadow-teal-500/10' : 'bg-card border-border shadow-sm'}`}
-              >
-                {status === 'current' && (
-                  <div className="absolute top-0 right-6 -translate-y-1/2 bg-teal-500 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-sm">
-                    In Progress
+              <article key={`${week.week}-${week.title}`} className="grid sm:grid-cols-[88px_1fr] border-b ss-hairline">
+                <div className="py-5 sm:py-7 sm:border-r ss-hairline flex sm:block items-center justify-between gap-4 sm:pr-5">
+                  <span className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground font-bold">Week</span>
+                  <span className={`sm:mt-3 h-10 w-10 rounded-full grid place-items-center text-xs font-black ${state === 'current' ? 'bg-[var(--signal)] text-black' : 'bg-muted text-foreground'}`}>{String(week.week).padStart(2, '0')}</span>
+                </div>
+                <div className="pb-6 sm:p-7 sm:pr-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-lg">{week.title}</h2>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{state === 'done' ? 'Complete' : state === 'current' ? 'In progress' : 'Upcoming'}</p>
+                    </div>
+                    {state === 'current' && <span className="ss-chip ss-chip-active !min-h-7 !px-2.5">Current</span>}
                   </div>
-                )}
-                <div className="flex items-center gap-4 mb-4">
-                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center font-bold text-lg shadow-sm ${
-                    status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
-                    status === 'current' ? 'bg-gradient-to-br from-teal-400 to-teal-500 text-white' :
-                    'bg-muted text-muted-foreground'
-                  }`}>
-                    W{w.week}
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground">{w.title}</h2>
-                    <p className="text-xs text-muted-foreground">
-                      {status === 'completed' ? '100% Completed' : status === 'current' ? '33% Completed' : 'Not Started'}
-                    </p>
+                  <div className="mt-5 space-y-3">
+                    {week.tasks.map((task, taskIndex) => {
+                      const completed = state === 'done' || (state === 'current' && taskIndex === 0);
+                      const playing = state === 'current' && taskIndex === 1;
+                      return (
+                        <div key={task} className="flex items-start gap-3 min-h-8">
+                          <span className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${completed ? 'bg-foreground text-background' : playing ? 'bg-[var(--signal)] text-black' : 'border ss-hairline'}`}>
+                            {completed ? <Check className="h-3 w-3" /> : playing ? <Play className="h-3 w-3 fill-current" /> : <Circle className="h-2.5 w-2.5 text-muted-foreground" />}
+                          </span>
+                          <span className={`text-sm ${completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <ul className="space-y-3">
-                  {w.tasks.map((task, j) => (
-                    <li key={j} className="flex items-start gap-3">
-                      {status === 'completed' || (status === 'current' && j === 0) ? (
-                        <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                      ) : status === 'current' && j === 1 ? (
-                        <PlayCircle className="h-5 w-5 text-teal-500 shrink-0 mt-0.5" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                      )}
-                      <span className={`text-sm ${
-                        status === 'completed' || (status === 'current' && j === 0) ? 'text-muted-foreground line-through' :
-                        status === 'current' && j === 1 ? 'text-foreground font-medium' :
-                        'text-muted-foreground'
-                      }`}>
-                        {task}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
+              </article>
             );
           })}
         </div>
 
-        <div className="space-y-6">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="rounded-2xl p-6 bg-card border border-border shadow-sm text-center">
-            <div className="mx-auto h-16 w-16 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
-              <Trophy className="h-8 w-8 text-amber-500" />
+        <aside className="space-y-8">
+          <div>
+            <div className="pb-3 border-b ss-hairline">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Progress</p>
+              <h2 className="mt-1">Plan status</h2>
             </div>
-            <h3 className="font-semibold text-foreground">Your Progress</h3>
-            <div className="mt-4 mb-2 h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 w-1/3" />
+            <div className="py-5 border-b ss-hairline">
+              <div className="flex items-center justify-between text-xs font-bold"><span>25% complete</span><span>1 / 4 weeks</span></div>
+              <div className="mt-4 h-2 bg-muted overflow-hidden rounded-full"><div className="h-full w-1/4 bg-[var(--signal)]" /></div>
             </div>
-            <p className="text-xs text-muted-foreground">Keep it up!</p>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="rounded-2xl p-6 bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20">
-            <BookOpen className="h-8 w-8 text-white/80 mb-4" />
-            <h3 className="font-semibold mb-2">AI Tutor</h3>
-            <p className="text-sm text-indigo-100 mb-4 leading-relaxed">
-              Need help with the current topic? Ask the AI tutor to explain with analogies or code examples.
-            </p>
-            <button className="w-full py-2 bg-white text-indigo-600 rounded-lg text-sm font-semibold shadow-sm hover:bg-white/90 transition-colors">
-              Chat with Tutor
-            </button>
-          </motion.div>
-        </div>
-      </div>
+          </div>
+          <div>
+            <div className="pb-3 border-b ss-hairline flex items-center justify-between">
+              <div><p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Tutor</p><h2 className="mt-1">Need help?</h2></div>
+              <Map className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="py-5 border-b ss-hairline text-xs text-muted-foreground">The tutor surface can use the same NVIDIA → OpenRouter provider chain when its backend endpoint is added.</p>
+          </div>
+        </aside>
+      </section>
     </div>
   );
 }
