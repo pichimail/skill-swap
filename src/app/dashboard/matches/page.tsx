@@ -1,47 +1,55 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { Search, Users } from 'lucide-react';
 import Link from 'next/link';
+import { Search, SlidersHorizontal, Users, Video, ArrowRight } from 'lucide-react';
+
+const filters = ['For you', 'Video ready', 'Beginner friendly', 'This week', 'Same timezone'];
 
 export default function MatchesPage() {
   return (
-    <div className="container mx-auto px-4 md:px-6 py-8 space-y-8">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="ss-page ss-page-pad space-y-7 lg:space-y-9">
+      <section className="grid md:grid-cols-[1fr_minmax(260px,360px)] gap-5 items-end">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-foreground">Browse Matches</h1>
-          <p className="text-sm text-muted-foreground mt-1">Find the perfect partner to exchange skills with.</p>
+          <p className="text-[10px] uppercase tracking-[0.17em] text-muted-foreground font-bold">Discovery</p>
+          <h1 className="mt-3">Find your next skill swap.</h1>
+          <p className="mt-3 max-w-xl text-sm text-muted-foreground">Search by skill, availability and session style. Match cards will populate from the live user and skills tables.</p>
         </div>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input 
-            type="search" 
-            placeholder="Search by skill..." 
-            className="h-10 w-full rounded-lg px-3 py-2 text-sm pl-9 outline-none text-foreground bg-card border border-border focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm" 
-          />
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input type="search" placeholder="Search skills or people" className="ss-input pl-10 pr-12" />
+          <button aria-label="Open filters" className="absolute right-1 top-1/2 -translate-y-1/2 min-h-9 min-w-9 grid place-items-center rounded-full hover:bg-muted"><SlidersHorizontal className="h-4 w-4" /></button>
         </div>
-      </motion.div>
+      </section>
 
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ delay: 0.1 }}
-        className="w-full bg-card border border-border rounded-2xl p-12 flex flex-col items-center justify-center text-center shadow-sm"
-      >
-        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Users className="h-8 w-8 text-muted-foreground" />
+      <section className="ss-chip-rail" aria-label="Match filters">
+        {filters.map((filter, index) => <button key={filter} className={`ss-chip ${index === 0 ? 'ss-chip-active' : ''}`}>{filter}</button>)}
+      </section>
+
+      <section className="border-y ss-hairline">
+        <div className="min-h-[360px] lg:min-h-[420px] py-10 md:py-16 flex flex-col items-start md:items-center md:text-center justify-center">
+          <span className="h-12 w-12 rounded-full bg-muted grid place-items-center"><Users className="h-5 w-5 text-muted-foreground" /></span>
+          <h2 className="mt-4 text-xl font-extrabold">No live matches yet</h2>
+          <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">The discovery surface is ready for backend data. As users add teach/learn skills, matching results can render here without changing the layout.</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link href="/dashboard/profile" className="ss-button-primary">Complete profile <ArrowRight className="h-4 w-4" /></Link>
+            <Link href="/dashboard/call" className="ss-button-secondary"><Video className="h-4 w-4" /> Open call room</Link>
+          </div>
         </div>
-        <h2 className="text-lg font-bold text-foreground mb-2">No users available right now</h2>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
-          Skill Swap is currently empty. As new learners join the platform and set up their profiles, they will automatically appear here. Check back later to find your perfect match!
-        </p>
-        <button 
-          disabled
-          className="px-6 py-2.5 bg-muted text-muted-foreground text-sm font-medium rounded-lg cursor-not-allowed"
-        >
-          Waiting for users...
-        </button>
-      </motion.div>
+      </section>
+
+      <section className="grid sm:grid-cols-3 border-b ss-hairline">
+        {[
+          ['01', 'Add teach skills', 'Tell the matcher what you can offer.'],
+          ['02', 'Add learn skills', 'Set the topics you want to practice.'],
+          ['03', 'Start swapping', 'Accept a match and move into messages or a call.'],
+        ].map(([step, title, copy]) => (
+          <div key={step} className="py-5 sm:px-5 sm:first:pl-0 border-t sm:border-t-0 sm:border-l first:border-l-0 ss-hairline">
+            <span className="text-[10px] font-black text-muted-foreground">{step}</span>
+            <h3 className="mt-2 text-sm font-extrabold">{title}</h3>
+            <p className="mt-1 text-[11px] text-muted-foreground">{copy}</p>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
