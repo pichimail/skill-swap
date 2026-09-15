@@ -19,7 +19,8 @@ export class AuthError extends Error {
   }
 }
 
-export async function requireUser(_request?: Request): Promise<AuthUser> {
+export async function requireUser(request?: Request): Promise<AuthUser> {
+  void request;
   const session = await getServerSession(authOptions);
   const sessionUser = session?.user;
   if (!sessionUser?.id) throw new AuthError('Authentication required', 401);

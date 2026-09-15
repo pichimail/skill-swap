@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 import { SessionProvider, useSession } from 'next-auth/react';
 import { authenticatedFetch } from '@/lib/api';
 
@@ -17,23 +17,23 @@ export const useAuth = () => useContext(AuthContext);
 
 function AuthBridge({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
-  const user = useMemo<AppUser | null>(() => {
-    if (!session?.user?.id) return null;
-    return {
-      uid: session.user.id,
-      email: session.user.email ?? null,
-      displayName: session.user.name ?? null,
-    };
-  }, [session?.user?.id, session?.user?.email, session?.user?.name]);
+  const userId = session?.user?.id ?? null;
+  const user: AppUser | null = userId
+    ? {
+        uid: userId,
+        email: session?.user?.email ?? null,
+        displayName: session?.user?.name ?? null,
+      }
+    : null;
 
   useEffect(() => {
-    if (!user || status !== 'authenticated') return;
+    if (!userId || status !== 'authenticated') return;
     void authenticatedFetch('/api/users/sync', { method: 'POST' })
       .then((response) => {
         if (!response.ok) console.warn('Unable to sync authenticated user profile');
       })
       .catch(() => console.warn('Unable to sync authenticated user profile'));
-  }, [user, status]);
+  }, [userId, status]);
 
   return (
     <AuthContext.Provider value={{ user, loading: status === 'loading' }}>
