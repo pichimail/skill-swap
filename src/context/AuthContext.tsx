@@ -2,61 +2,78 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { authenticatedFetch } from '@/lib/api';
+import { auth } from '@/lib/firebase';
+
+type AppUser = { uid: string; email: string | null; displayName: string | null };
+
+const DEMO_ENABLED = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === 'true';
 
 interface AuthContextType {
-  user: { uid: string; email: string | null; displayName: string | null } | null;
+  user: AppUser | null;
   loading: boolean;
   isDemo: boolean;
+  demoEnabled: boolean;
   loginDemo: () => void;
   logoutDemo: () => void;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true, isDemo: false, loginDemo: () => {}, logoutDemo: () => {} });
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  isDemo: false,
+  demoEnabled: false,
+  loginDemo: () => {},
+  logoutDemo: () => {},
+});
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<{ uid: string; email: string | null; displayName: string | null } | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    let isMounted = true;
-    const demoStatus = localStorage.getItem('skill_swap_demo_user');
-    if (demoStatus === 'true') {
-      if (isMounted) {
-        setUser({ uid: 'demo-user', email: 'demo@skillswap.com', displayName: 'Gnanu Raavi' });
-        setIsDemo(true);
-        setLoading(false);
-      }
-      return;
+    let mounted = true;
+
+    if (DEMO_ENABLED && localStorage.getItem('skill_swap_demo_user') === 'true') {
+      setUser({ uid: 'demo-user', email: 'demo@skillswap.local', displayName: 'Demo User' });
+      setIsDemo(true);
+      setLoading(false);
+      return () => { mounted = false; };
     }
 
+    localStorage.removeItem('skill_swap_demo_user');
+
     if (!auth) {
-      if (isMounted) setLoading(false);
-      return;
+      setLoading(false);
+      return () => { mounted = false; };
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (isMounted) {
-        setUser(currentUser ? { uid: currentUser.uid, email: currentUser.email, displayName: currentUser.displayName } : null);
-        setIsDemo(false);
-        setLoading(false);
-      }
+      if (!mounted) return;
+      setUser(currentUser ? {
+        uid: currentUser.uid,
+        email: currentUser.email,
+        displayName: currentUser.displayName,
+      } : null);
+      setIsDemo(false);
+      setLoading(false);
     });
 
     return () => {
-      isMounted = false;
+      mounted = false;
       unsubscribe();
     };
   }, []);
 
   const loginDemo = () => {
+    if (!DEMO_ENABLED) throw new Error('Demo authentication is disabled');
     localStorage.setItem('skill_swap_demo_user', 'true');
-    setUser({ uid: 'demo-user', email: 'demo@skillswap.com', displayName: 'Gnanu Raavi' });
+    setUser({ uid: 'demo-user', email: 'demo@skillswap.local', displayName: 'Demo User' });
     setIsDemo(true);
     router.push('/dashboard');
   };
@@ -69,23 +86,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isDemo) return;
 
-    void fetch('/api/users/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-      }),
-    }).catch((error) => {
-      console.warn('Unable to sync user profile to Neon:', error);
-    });
-  }, [user]);
+    void authenticatedFetch('/api/users/sync', { method: 'POST' })
+      .then((response) => {
+        if (!response.ok) console.warn('Unable to sync authenticated user profile');
+      })
+      .catch(() => console.warn('Unable to sync authenticated user profile'));
+  }, [user, isDemo]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isDemo, loginDemo, logoutDemo }}>
+    <AuthContext.Provider value={{ user, loading, isDemo, demoEnabled: DEMO_ENABLED, loginDemo, logoutDemo }}>
       {children}
     </AuthContext.Provider>
   );

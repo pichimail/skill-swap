@@ -1,38 +1,26 @@
 'use client';
 
-import Link from 'next/link';
-import { MessageSquare, Search, Users, ArrowRight } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Search, Send, Users } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { authenticatedFetch, readJson } from '@/lib/api';
+
+type Conversation = { id: string; other_user_id: string; other_display_name: string | null; other_avatar_url: string | null; last_message: string | null; last_message_at: string | null; unread_count: number };
+type Message = { id: string; sender_id: string; body: string; created_at: string };
 
 export default function MessagesPage() {
-  return (
-    <div className="ss-page min-h-[calc(100dvh-56px)] lg:min-h-[calc(100dvh-64px)] grid lg:grid-cols-[320px_1fr]">
-      <aside className="border-b lg:border-b-0 lg:border-r ss-hairline p-4 lg:p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Inbox</p>
-            <h1 className="mt-1 text-xl lg:text-2xl">Messages</h1>
-          </div>
-          <span className="h-9 min-w-9 px-2 rounded-full bg-[var(--signal)] text-black grid place-items-center text-[10px] font-black">0</span>
-        </div>
-        <div className="relative mt-4">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input className="ss-input pl-10" placeholder="Search conversations" aria-label="Search conversations" />
-        </div>
-        <div className="mt-5 py-7 border-y ss-hairline text-center lg:text-left">
-          <Users className="h-5 w-5 mx-auto lg:mx-0 text-muted-foreground" />
-          <p className="mt-3 text-xs font-extrabold">No conversations yet</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">Accepted matches will appear in this rail.</p>
-        </div>
-      </aside>
+  const { user } = useAuth(); const [conversations, setConversations] = useState<Conversation[]>([]); const [selected, setSelected] = useState<Conversation | null>(null); const [messages, setMessages] = useState<Message[]>([]); const [query, setQuery] = useState(''); const [body, setBody] = useState(''); const [error, setError] = useState<string | null>(null);
+  const loadConversations = async () => { const data = await authenticatedFetch('/api/conversations').then((r) => readJson<{ conversations: Conversation[] }>(r)); setConversations(data.conversations); if (selected) setSelected(data.conversations.find((c) => c.id === selected.id) || selected); };
+  const loadMessages = async (id: string) => { const data = await authenticatedFetch(`/api/conversations/${id}/messages`).then((r) => readJson<{ messages: Message[] }>(r)); setMessages(data.messages); };
+  useEffect(() => { void loadConversations().catch((e) => setError(e instanceof Error ? e.message : 'Unable to load messages')); const timer = window.setInterval(() => void loadConversations().catch(() => undefined), 5000); return () => clearInterval(timer); }, []);
+  useEffect(() => { if (!selected) return; void loadMessages(selected.id); const timer = window.setInterval(() => void loadMessages(selected.id).catch(() => undefined), 3000); return () => clearInterval(timer); }, [selected?.id]);
+  const filtered = useMemo(() => conversations.filter((c) => (c.other_display_name || '').toLowerCase().includes(query.toLowerCase())), [conversations, query]);
+  const send = async (event: FormEvent) => { event.preventDefault(); if (!selected || !body.trim()) return; try { await authenticatedFetch(`/api/conversations/${selected.id}/messages`, { method: 'POST', body: JSON.stringify({ body }) }).then(readJson); setBody(''); await loadMessages(selected.id); await loadConversations(); } catch (e) { setError(e instanceof Error ? e.message : 'Unable to send message'); } };
 
-      <section className="min-h-[430px] p-5 md:p-8 flex items-center justify-center">
-        <div className="max-w-sm text-center">
-          <span className="h-14 w-14 mx-auto rounded-full bg-muted grid place-items-center"><MessageSquare className="h-6 w-6 text-muted-foreground" /></span>
-          <h2 className="mt-4 text-xl font-extrabold">Start with a match.</h2>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Messages are tied to matched skill-exchange partners. Once a conversation exists, this space becomes the full chat view on desktop and a native full-screen thread on mobile.</p>
-          <Link href="/dashboard/matches" className="ss-button-primary mt-5">Browse matches <ArrowRight className="h-4 w-4" /></Link>
-        </div>
-      </section>
-    </div>
-  );
+  return <div className="ss-page min-h-[calc(100dvh-56px)] lg:min-h-[calc(100dvh-64px)] grid lg:grid-cols-[320px_1fr]">
+    <aside className={`${selected ? 'hidden lg:block' : 'block'} border-b lg:border-b-0 lg:border-r ss-hairline p-4 lg:p-5`}><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Inbox</p><h1 className="mt-1 text-xl lg:text-2xl">Messages</h1></div><span className="h-9 min-w-11 px-2 rounded-full bg-[var(--signal)] text-black grid place-items-center text-[10px] font-black">{conversations.reduce((sum,c)=>sum+Number(c.unread_count||0),0)}</span></div><div className="relative mt-4"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><input value={query} onChange={(e)=>setQuery(e.target.value)} className="ss-input pl-10" placeholder="Search conversations" /></div>{error && <p className="mt-3 text-xs text-red-500">{error}</p>}<div className="mt-5 border-y ss-hairline">{filtered.length ? filtered.map((conversation) => <button key={conversation.id} onClick={() => setSelected(conversation)} className="w-full min-h-[72px] py-3 border-b last:border-b-0 ss-hairline text-left flex items-center gap-3"><span className="h-10 w-10 rounded-full bg-muted grid place-items-center font-bold">{(conversation.other_display_name||'U').slice(0,2).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block text-xs font-bold truncate">{conversation.other_display_name || 'Skill Swap user'}</span><span className="block mt-1 text-[11px] text-muted-foreground truncate">{conversation.last_message || 'No messages yet'}</span></span>{conversation.unread_count > 0 && <span className="h-6 min-w-6 rounded-full bg-[var(--signal)] text-black grid place-items-center text-[10px] font-black">{conversation.unread_count}</span>}</button>) : <div className="py-7 text-center"><Users className="h-5 w-5 mx-auto text-muted-foreground" /><p className="mt-3 text-xs font-extrabold">No conversations yet</p></div>}</div></aside>
+    <section className={`${selected ? 'flex' : 'hidden lg:flex'} min-h-[430px] flex-col`}>
+      {selected ? <><header className="h-16 px-4 border-b ss-hairline flex items-center gap-3"><button onClick={() => setSelected(null)} className="lg:hidden min-h-11 min-w-11 grid place-items-center"><ArrowLeft className="h-4 w-4" /></button><span className="h-9 w-9 rounded-full bg-muted grid place-items-center font-bold">{(selected.other_display_name||'U').slice(0,2).toUpperCase()}</span><h2 className="text-sm font-extrabold">{selected.other_display_name || 'Skill Swap user'}</h2></header><div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">{messages.map((message) => <div key={message.id} className={`flex ${message.sender_id === user?.uid ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] px-3 py-2.5 rounded-[10px] text-sm ${message.sender_id === user?.uid ? 'bg-[var(--signal)] text-black' : 'bg-muted'}`}>{message.body}</div></div>)}</div><form onSubmit={send} className="p-3 border-t ss-hairline flex gap-2"><input value={body} onChange={(e)=>setBody(e.target.value)} className="ss-input flex-1" placeholder="Write a message" /><button disabled={!body.trim()} className="ss-button-primary min-w-11 px-3" aria-label="Send message"><Send className="h-4 w-4" /></button></form></> : <div className="flex-1 grid place-items-center text-center p-6"><div><MessageSquare className="h-6 w-6 mx-auto text-muted-foreground" /><h2 className="mt-4 text-xl">Choose a conversation.</h2></div></div>}
+    </section>
+  </div>;
 }
