@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EXPECTED_SCHEMA_VERSION, evaluateSchemaState, REQUIRED_TABLES } from '@/lib/migrations';
+import { EXPECTED_SCHEMA_VERSION, evaluateSchemaState, REQUIRED_TABLES } from '@/lib/schema-contract';
 
 describe('evaluateSchemaState', () => {
   it('fails when a required table is missing', () => {
