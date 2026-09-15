@@ -1,55 +1,28 @@
 'use client';
 
 import Link from 'next/link';
-import { Search, SlidersHorizontal, Users, Video, ArrowRight } from 'lucide-react';
+import { ArrowRight, Check, Search, UserPlus, Users, Video, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { authenticatedFetch, readJson } from '@/lib/api';
 
-const filters = ['For you', 'Video ready', 'Beginner friendly', 'This week', 'Same timezone'];
+type Candidate = { id: string; display_name: string | null; avatar_url: string | null; bio: string | null; location: string | null; score: number };
+type Match = { id: string; status: string; score: number; requested_by: string | null; other_user_id: string; other_display_name: string | null; other_avatar_url: string | null; skill_name: string | null };
 
 export default function MatchesPage() {
-  return (
-    <div className="ss-page ss-page-pad space-y-7 lg:space-y-9">
-      <section className="grid md:grid-cols-[1fr_minmax(260px,360px)] gap-5 items-end">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.17em] text-muted-foreground font-bold">Discovery</p>
-          <h1 className="mt-3">Find your next skill swap.</h1>
-          <p className="mt-3 max-w-xl text-sm text-muted-foreground">Search by skill, availability and session style. Match cards will populate from the live user and skills tables.</p>
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input type="search" placeholder="Search skills or people" className="ss-input pl-10 pr-12" />
-          <button aria-label="Open filters" className="absolute right-1 top-1/2 -translate-y-1/2 min-h-9 min-w-9 grid place-items-center rounded-full hover:bg-muted"><SlidersHorizontal className="h-4 w-4" /></button>
-        </div>
-      </section>
+  const { user } = useAuth();
+  const [view, setView] = useState<'discover' | 'mine'>('discover'); const [query, setQuery] = useState('');
+  const [candidates, setCandidates] = useState<Candidate[]>([]); const [matches, setMatches] = useState<Match[]>([]); const [error, setError] = useState<string | null>(null);
+  const load = async () => { const [a, b] = await Promise.all([authenticatedFetch('/api/matches').then((r) => readJson<{ candidates: Candidate[] }>(r)), authenticatedFetch('/api/matches?view=mine').then((r) => readJson<{ matches: Match[] }>(r))]); setCandidates(a.candidates); setMatches(b.matches); };
+  useEffect(() => { void load().catch((e) => setError(e instanceof Error ? e.message : 'Unable to load matches')); }, []);
+  const filtered = useMemo(() => candidates.filter((c) => `${c.display_name || ''} ${c.bio || ''} ${c.location || ''}`.toLowerCase().includes(query.toLowerCase())), [candidates, query]);
+  const requestMatch = async (targetUserId: string) => { await authenticatedFetch('/api/matches', { method: 'POST', body: JSON.stringify({ targetUserId }) }).then(readJson); await load(); setView('mine'); };
+  const updateMatch = async (id: string, action: 'accept' | 'decline') => { await authenticatedFetch(`/api/matches/${id}`, { method: 'PATCH', body: JSON.stringify({ action }) }).then(readJson); await load(); };
 
-      <section className="ss-chip-rail" aria-label="Match filters">
-        {filters.map((filter, index) => <button key={filter} className={`ss-chip ${index === 0 ? 'ss-chip-active' : ''}`}>{filter}</button>)}
-      </section>
-
-      <section className="border-y ss-hairline">
-        <div className="min-h-[360px] lg:min-h-[420px] py-10 md:py-16 flex flex-col items-start md:items-center md:text-center justify-center">
-          <span className="h-12 w-12 rounded-full bg-muted grid place-items-center"><Users className="h-5 w-5 text-muted-foreground" /></span>
-          <h2 className="mt-4 text-xl font-extrabold">No live matches yet</h2>
-          <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">The discovery surface is ready for backend data. As users add teach/learn skills, matching results can render here without changing the layout.</p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Link href="/dashboard/profile" className="ss-button-primary">Complete profile <ArrowRight className="h-4 w-4" /></Link>
-            <Link href="/dashboard/call" className="ss-button-secondary"><Video className="h-4 w-4" /> Open call room</Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid sm:grid-cols-3 border-b ss-hairline">
-        {[
-          ['01', 'Add teach skills', 'Tell the matcher what you can offer.'],
-          ['02', 'Add learn skills', 'Set the topics you want to practice.'],
-          ['03', 'Start swapping', 'Accept a match and move into messages or a call.'],
-        ].map(([step, title, copy]) => (
-          <div key={step} className="py-5 sm:px-5 sm:first:pl-0 border-t sm:border-t-0 sm:border-l first:border-l-0 ss-hairline">
-            <span className="text-[10px] font-black text-muted-foreground">{step}</span>
-            <h3 className="mt-2 text-sm font-extrabold">{title}</h3>
-            <p className="mt-1 text-[11px] text-muted-foreground">{copy}</p>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
+  return <div className="ss-page ss-page-pad space-y-7 lg:space-y-9"><section className="grid md:grid-cols-[1fr_minmax(260px,360px)] gap-5 items-end"><div><p className="text-[10px] uppercase tracking-[0.17em] text-muted-foreground font-bold">Discovery</p><h1 className="mt-3">Find your next skill swap.</h1><p className="mt-3 max-w-xl text-sm text-muted-foreground">Candidates are computed from reciprocal teach/learn skills and exclude blocked or inactive accounts.</p></div><div className="relative"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search people or profile text" className="ss-input pl-10" /></div></section>
+    <section className="ss-chip-rail"><button className={`ss-chip ${view === 'discover' ? 'ss-chip-active' : ''}`} onClick={() => setView('discover')}>Discover</button><button className={`ss-chip ${view === 'mine' ? 'ss-chip-active' : ''}`} onClick={() => setView('mine')}>My matches <span>{matches.length}</span></button></section>
+    {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
+    {view === 'discover' ? <section className="border-t ss-hairline">{filtered.length ? filtered.map((candidate) => <article key={candidate.id} className="min-h-[110px] py-5 border-b ss-hairline flex flex-col sm:flex-row sm:items-center gap-4"><span className="h-12 w-12 rounded-full bg-muted grid place-items-center font-black">{(candidate.display_name || 'U').slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><h2 className="text-base">{candidate.display_name || 'Skill Swap user'}</h2><p className="mt-1 text-xs text-muted-foreground line-clamp-2">{candidate.bio || 'No bio yet'}{candidate.location ? ` · ${candidate.location}` : ''}</p></div><span className="ss-chip ss-chip-active">{candidate.score}% fit</span><button onClick={() => requestMatch(candidate.id)} className="ss-button-primary"><UserPlus className="h-4 w-4" /> Request</button></article>) : <Empty />}</section> : <section className="border-t ss-hairline">{matches.length ? matches.map((match) => { const incoming = match.status === 'pending' && match.requested_by !== user?.uid; return <article key={match.id} className="min-h-[110px] py-5 border-b ss-hairline flex flex-col sm:flex-row sm:items-center gap-4"><span className="h-12 w-12 rounded-full bg-muted grid place-items-center font-black">{(match.other_display_name || 'U').slice(0,2).toUpperCase()}</span><div className="flex-1"><h2 className="text-base">{match.other_display_name || 'Skill Swap user'}</h2><p className="mt-1 text-xs text-muted-foreground">{match.skill_name || 'Skill exchange'} · {match.status}</p></div>{incoming && <div className="flex gap-2"><button onClick={() => updateMatch(match.id,'accept')} className="ss-button-primary"><Check className="h-4 w-4" /> Accept</button><button onClick={() => updateMatch(match.id,'decline')} className="ss-button-secondary"><X className="h-4 w-4" /> Decline</button></div>}{match.status === 'accepted' && <><Link href="/dashboard/messages" className="ss-button-secondary">Message</Link><Link href={`/dashboard/call?match=${match.id}`} className="ss-button-primary"><Video className="h-4 w-4" /> Start call</Link></>}</article>; }) : <Empty />}</section>}
+  </div>;
 }
+function Empty() { return <div className="min-h-[320px] py-10 grid place-items-center text-center border-b ss-hairline"><div><Users className="h-6 w-6 mx-auto text-muted-foreground" /><h2 className="mt-4 text-lg">Nothing here yet</h2><p className="mt-2 text-xs text-muted-foreground">Add teach and learn skills to improve reciprocal matching.</p><Link href="/dashboard/profile" className="ss-button-primary mt-5">Complete profile <ArrowRight className="h-4 w-4" /></Link></div></div>; }
