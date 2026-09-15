@@ -11,13 +11,13 @@ try {
 
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
-  `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://openrouter.ai https://integrate.api.nvidia.com https://*.livekit.cloud wss://*.livekit.cloud${livekitConnect}`,
-  "media-src 'self' blob:",
-  "frame-src https://accounts.google.com https://*.firebaseapp.com",
+  `connect-src 'self' https://openrouter.ai https://integrate.api.nvidia.com https://*.livekit.cloud wss://*.livekit.cloud https://*.blob.vercel-storage.com${livekitConnect}`,
+  "media-src 'self' blob: https://*.blob.vercel-storage.com",
+  "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
