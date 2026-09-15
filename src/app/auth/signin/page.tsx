@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 
 export default function SignInPage() {
   const router = useRouter();
-  const { loginDemo, user, loading } = useAuth();
+  const { loginDemo, demoEnabled, user, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,17 +22,24 @@ export default function SignInPage() {
     if (!loading && user) router.replace('/dashboard');
   }, [user, loading, router]);
 
+  const ensureAuth = () => {
+    if (!auth) {
+      setError('Authentication is not configured for this deployment.');
+      return null;
+    }
+    return auth;
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!auth) {
-      loginDemo();
-      return;
-    }
+    const firebaseAuth = ensureAuth();
+    if (!firebaseAuth) return;
+
     setIsLoading(true);
     setError(null);
     try {
-      if (mode === 'signin') await signInWithEmailAndPassword(auth, email, password);
-      else await createUserWithEmailAndPassword(auth, email, password);
+      if (mode === 'signin') await signInWithEmailAndPassword(firebaseAuth, email, password);
+      else await createUserWithEmailAndPassword(firebaseAuth, email, password);
       router.push('/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Authentication failed');
@@ -42,14 +49,13 @@ export default function SignInPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    if (!auth) {
-      loginDemo();
-      return;
-    }
+    const firebaseAuth = ensureAuth();
+    if (!firebaseAuth) return;
+
     setIsLoading(true);
     setError(null);
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
       router.push('/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Google sign-in failed');
@@ -74,38 +80,32 @@ export default function SignInPage() {
           <h1 className="mt-3 text-3xl sm:text-4xl">{mode === 'signin' ? 'Return to your workspace.' : 'Start your skill exchange.'}</h1>
           <p className="mt-3 text-sm text-muted-foreground">{mode === 'signin' ? 'Use your email or Google account to continue.' : 'Create an account, then complete your teach and learn skills inside the dashboard.'}</p>
 
-          {error && (
-            <div className="mt-6 min-h-11 p-3 rounded-[9px] border border-red-500/30 bg-red-500/5 flex items-start gap-3 text-xs text-red-500">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span className="break-words">{error}</span>
-            </div>
-          )}
+          {error && <div role="alert" className="mt-6 min-h-11 p-3 rounded-[9px] border border-red-500/30 bg-red-500/5 flex items-start gap-3 text-xs text-red-500"><AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /><span className="break-words">{error}</span></div>}
 
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             <label className="block">
               <span className="block text-[10px] uppercase tracking-[0.13em] text-muted-foreground font-bold mb-2">Email</span>
               <input id="email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ss-input" placeholder="name@example.com" />
             </label>
-
             <label className="block">
               <span className="block text-[10px] uppercase tracking-[0.13em] text-muted-foreground font-bold mb-2">Password</span>
               <span className="relative block">
-                <input id="password" type={showPassword ? 'text' : 'password'} required autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="ss-input pr-12" placeholder="Enter your password" />
-                <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-1 top-1/2 -translate-y-1/2 min-h-10 min-w-10 grid place-items-center rounded-full hover:bg-muted" aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <input id="password" type={showPassword ? 'text' : 'password'} required minLength={6} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="ss-input pr-12" placeholder="Enter your password" />
+                <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-0 top-1/2 -translate-y-1/2 min-h-11 min-w-11 grid place-items-center rounded-full hover:bg-muted" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
               </span>
             </label>
-
-            <button type="submit" disabled={isLoading} className="ss-button-primary w-full disabled:opacity-50">{isLoading ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+            <button type="submit" disabled={isLoading || !auth} className="ss-button-primary w-full disabled:opacity-50">{isLoading ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
           </form>
 
           <div className="my-6 flex items-center gap-3"><span className="h-px flex-1 bg-[var(--hairline)]" /><span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">or</span><span className="h-px flex-1 bg-[var(--hairline)]" /></div>
 
-          <button onClick={handleGoogleSignIn} disabled={isLoading} className="ss-button-secondary w-full disabled:opacity-50">
+          <button onClick={handleGoogleSignIn} disabled={isLoading || !auth} className="ss-button-secondary w-full disabled:opacity-50">
             <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09A7 7 0 0 1 5.49 12c0-.73.13-1.43.35-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1c-4.3 0-8.01 2.47-9.82 6.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
             Continue with Google
           </button>
+
+          {demoEnabled && <button onClick={loginDemo} className="ss-button-secondary w-full mt-2">Continue in local demo</button>}
+          {!auth && <p className="mt-3 text-xs text-red-500">Firebase client configuration is missing. Production authentication is disabled rather than falling back to demo access.</p>}
 
           <p className="mt-7 text-center text-xs text-muted-foreground">{mode === 'signin' ? "Don't have an account?" : 'Already have an account?'} <button onClick={() => { setMode(mode === 'signin' ? 'register' : 'signin'); setError(null); }} className="font-extrabold text-foreground underline underline-offset-4">{mode === 'signin' ? 'Create one' : 'Sign in'}</button></p>
         </div>
@@ -116,13 +116,7 @@ export default function SignInPage() {
       <aside className="hidden lg:flex relative overflow-hidden bg-[#050505] text-white items-end p-10 xl:p-16">
         <div className="absolute inset-0 opacity-25" style={{ backgroundImage: 'radial-gradient(rgba(245,220,24,.75) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
         <div className="absolute top-10 right-10 h-28 w-28 rounded-full bg-[var(--signal)]" />
-        <div className="relative z-10 max-w-xl">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-white/45 font-bold">Skill exchange workspace</p>
-          <h2 className="mt-4 text-[clamp(2.7rem,5vw,5rem)] leading-[.95] font-black tracking-[-.055em] text-white">Match. Call. Learn. Repeat.</h2>
-          <div className="mt-8 grid grid-cols-3 border-y border-white/15">
-            {['Peer matching', 'AI roadmaps', 'Live sessions'].map((item, index) => <div key={item} className={`py-4 text-[11px] font-bold ${index ? 'border-l border-white/15 pl-4' : ''}`}>{item}</div>)}
-          </div>
-        </div>
+        <div className="relative z-10 max-w-xl"><p className="text-[10px] uppercase tracking-[0.18em] text-white/45 font-bold">Skill exchange workspace</p><h2 className="mt-4 text-[clamp(2.7rem,5vw,5rem)] leading-[.95] font-black tracking-[-.055em] text-white">Match. Call. Learn. Repeat.</h2><div className="mt-8 grid grid-cols-3 border-y border-white/15">{['Peer matching', 'AI roadmaps', 'Live sessions'].map((item, index) => <div key={item} className={`py-4 text-[11px] font-bold ${index ? 'border-l border-white/15 pl-4' : ''}`}>{item}</div>)}</div></div>
       </aside>
     </div>
   );
