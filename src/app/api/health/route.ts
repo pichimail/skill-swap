@@ -9,11 +9,8 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const nvidiaConfigured = Boolean(process.env.NVIDIA_API_KEY);
   const openRouterConfigured = Boolean(process.env.OPENROUTER_API_KEY);
-  const liveKitConfigured = Boolean(
-    (process.env.LIVEKIT_URL || process.env.NEXT_PUBLIC_LIVEKIT_URL) &&
-      process.env.LIVEKIT_API_KEY &&
-      process.env.LIVEKIT_API_SECRET,
-  );
+  const liveKitConfigured = Boolean((process.env.LIVEKIT_URL || process.env.NEXT_PUBLIC_LIVEKIT_URL) && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET);
+  const blobConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL_OIDC_TOKEN);
 
   const result = {
     ok: true,
@@ -21,57 +18,31 @@ export async function GET() {
     schema: { ready: false, version: null as string | null, expected: EXPECTED_SCHEMA_VERSION },
     redis: { configured: hasRedis, reachable: false },
     auth: { googleOAuth: isGoogleOAuthConfigured() },
-    storage: { blob: Boolean(process.env.BLOB_READ_WRITE_TOKEN) },
+    storage: { blob: blobConfigured },
     realtime: { livekit: liveKitConfigured },
     ai: {
       ready: nvidiaConfigured || openRouterConfigured,
-      nvidia: {
-        configured: nvidiaConfigured,
-        model: process.env.NVIDIA_MODEL || 'nvidia/nemotron-3.5-lightning-30b-a3b',
-      },
-      openrouter: {
-        configured: openRouterConfigured,
-        model: process.env.OPENROUTER_MODEL || 'openrouter/auto',
-      },
+      nvidia: { configured: nvidiaConfigured, model: process.env.NVIDIA_MODEL || 'nvidia/nemotron-3.5-lightning-30b-a3b' },
+      openrouter: { configured: openRouterConfigured, model: process.env.OPENROUTER_MODEL || 'openrouter/auto' },
     },
   };
 
   if (hasDatabase) {
     try {
-      const sql = getDb();
-      await sql`SELECT 1 AS ok`;
-      result.database.reachable = true;
-      const schemaState = await checkSchemaVersion();
-      result.schema.ready = schemaState.ready;
-      result.schema.version = schemaState.version;
+      const sql = getDb(); await sql`SELECT 1 AS ok`; result.database.reachable = true;
+      const schemaState = await checkSchemaVersion(); result.schema.ready = schemaState.ready; result.schema.version = schemaState.version;
       if (!schemaState.ready) result.ok = false;
-    } catch {
-      result.ok = false;
-    }
-  } else {
-    result.ok = false;
-  }
+    } catch { result.ok = false; }
+  } else result.ok = false;
 
   if (hasRedis) {
-    try {
-      const redis = getRedis();
-      if (redis) {
-        await redis.set('skillswap:health', Date.now(), { ex: 60 });
-        result.redis.reachable = true;
-      }
-    } catch {
-      result.ok = false;
-    }
-  } else {
-    result.ok = false;
-  }
+    try { const redis = getRedis(); if (redis) { await redis.set('skillswap:health', Date.now(), { ex: 60 }); result.redis.reachable = true; } }
+    catch { result.ok = false; }
+  } else result.ok = false;
 
   if (!result.auth.googleOAuth) result.ok = false;
   if (!result.ai.ready) result.ok = false;
   if (!result.realtime.livekit) result.ok = false;
 
-  return NextResponse.json(result, {
-    status: result.ok ? 200 : 503,
-    headers: { 'Cache-Control': 'no-store, max-age=0' },
-  });
+  return NextResponse.json(result, { status: result.ok ? 200 : 503, headers: { 'Cache-Control': 'no-store, max-age=0' } });
 }
