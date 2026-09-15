@@ -3,63 +3,27 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AlertCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { signIn } from 'next-auth/react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function SignInPage() {
   const router = useRouter();
-  const { loginDemo, demoEnabled, user, loading } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const { user, loading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<'signin' | 'register'>('signin');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard');
   }, [user, loading, router]);
 
-  const ensureAuth = () => {
-    if (!auth) {
-      setError('Authentication is not configured for this deployment.');
-      return null;
-    }
-    return auth;
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const firebaseAuth = ensureAuth();
-    if (!firebaseAuth) return;
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      if (mode === 'signin') await signInWithEmailAndPassword(firebaseAuth, email, password);
-      else await createUserWithEmailAndPassword(firebaseAuth, email, password);
-      router.push('/dashboard');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Authentication failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleGoogleSignIn = async () => {
-    const firebaseAuth = ensureAuth();
-    if (!firebaseAuth) return;
-
     setIsLoading(true);
     setError(null);
     try {
-      await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
-      router.push('/dashboard');
+      await signIn('google', { callbackUrl: '/dashboard' });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Google sign-in failed');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -76,38 +40,18 @@ export default function SignInPage() {
         </div>
 
         <div className="w-full max-w-md mx-auto flex-1 flex flex-col justify-center py-12">
-          <p className="text-[10px] uppercase tracking-[0.17em] text-muted-foreground font-bold">{mode === 'signin' ? 'Welcome back' : 'Create account'}</p>
-          <h1 className="mt-3 text-3xl sm:text-4xl">{mode === 'signin' ? 'Return to your workspace.' : 'Start your skill exchange.'}</h1>
-          <p className="mt-3 text-sm text-muted-foreground">{mode === 'signin' ? 'Use your email or Google account to continue.' : 'Create an account, then complete your teach and learn skills inside the dashboard.'}</p>
+          <p className="text-[10px] uppercase tracking-[0.17em] text-muted-foreground font-bold">Google account</p>
+          <h1 className="mt-3 text-3xl sm:text-4xl">Return to your workspace.</h1>
+          <p className="mt-3 text-sm text-muted-foreground">Skill Swap uses Google OAuth only. Your Google password is never shared with Skill Swap.</p>
 
           {error && <div role="alert" className="mt-6 min-h-11 p-3 rounded-[9px] border border-red-500/30 bg-red-500/5 flex items-start gap-3 text-xs text-red-500"><AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /><span className="break-words">{error}</span></div>}
 
-          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
-            <label className="block">
-              <span className="block text-[10px] uppercase tracking-[0.13em] text-muted-foreground font-bold mb-2">Email</span>
-              <input id="email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="ss-input" placeholder="name@example.com" />
-            </label>
-            <label className="block">
-              <span className="block text-[10px] uppercase tracking-[0.13em] text-muted-foreground font-bold mb-2">Password</span>
-              <span className="relative block">
-                <input id="password" type={showPassword ? 'text' : 'password'} required minLength={6} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="ss-input pr-12" placeholder="Enter your password" />
-                <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-0 top-1/2 -translate-y-1/2 min-h-11 min-w-11 grid place-items-center rounded-full hover:bg-muted" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
-              </span>
-            </label>
-            <button type="submit" disabled={isLoading || !auth} className="ss-button-primary w-full disabled:opacity-50">{isLoading ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
-          </form>
-
-          <div className="my-6 flex items-center gap-3"><span className="h-px flex-1 bg-[var(--hairline)]" /><span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-bold">or</span><span className="h-px flex-1 bg-[var(--hairline)]" /></div>
-
-          <button onClick={handleGoogleSignIn} disabled={isLoading || !auth} className="ss-button-secondary w-full disabled:opacity-50">
+          <button onClick={handleGoogleSignIn} disabled={isLoading || loading} className="ss-button-primary w-full mt-8 disabled:opacity-50">
             <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09A7 7 0 0 1 5.49 12c0-.73.13-1.43.35-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1c-4.3 0-8.01 2.47-9.82 6.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-            Continue with Google
+            {isLoading ? 'Opening Google…' : 'Continue with Google'}
           </button>
 
-          {demoEnabled && <button onClick={loginDemo} className="ss-button-secondary w-full mt-2">Continue in local demo</button>}
-          {!auth && <p className="mt-3 text-xs text-red-500">Firebase client configuration is missing. Production authentication is disabled rather than falling back to demo access.</p>}
-
-          <p className="mt-7 text-center text-xs text-muted-foreground">{mode === 'signin' ? "Don't have an account?" : 'Already have an account?'} <button onClick={() => { setMode(mode === 'signin' ? 'register' : 'signin'); setError(null); }} className="font-extrabold text-foreground underline underline-offset-4">{mode === 'signin' ? 'Create one' : 'Sign in'}</button></p>
+          <p className="mt-5 text-center text-[11px] text-muted-foreground">By continuing, Google confirms your account identity and email address. Product data remains in Skill Swap's Neon database.</p>
         </div>
 
         <p className="text-[10px] text-muted-foreground pb-[env(safe-area-inset-bottom)]">© {new Date().getFullYear()} Skill Swap</p>

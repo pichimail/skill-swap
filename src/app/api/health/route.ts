@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb, hasDatabase } from '@/lib/db';
-import { isFirebaseAdminConfigured } from '@/lib/firebase-admin';
+import { isGoogleOAuthConfigured } from '@/lib/auth';
 import { checkSchemaVersion, EXPECTED_SCHEMA_VERSION } from '@/lib/migrations';
 import { getRedis, hasRedis } from '@/lib/redis';
 
@@ -20,13 +20,14 @@ export async function GET() {
     database: { configured: hasDatabase, reachable: false },
     schema: { ready: false, version: null as string | null, expected: EXPECTED_SCHEMA_VERSION },
     redis: { configured: hasRedis, reachable: false },
-    auth: { firebaseAdmin: isFirebaseAdminConfigured() },
+    auth: { googleOAuth: isGoogleOAuthConfigured() },
+    storage: { blob: Boolean(process.env.BLOB_READ_WRITE_TOKEN) },
     realtime: { livekit: liveKitConfigured },
     ai: {
       ready: nvidiaConfigured || openRouterConfigured,
       nvidia: {
         configured: nvidiaConfigured,
-        model: process.env.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct',
+        model: process.env.NVIDIA_MODEL || 'nvidia/nemotron-3.5-lightning-30b-a3b',
       },
       openrouter: {
         configured: openRouterConfigured,
@@ -65,7 +66,7 @@ export async function GET() {
     result.ok = false;
   }
 
-  if (!result.auth.firebaseAdmin) result.ok = false;
+  if (!result.auth.googleOAuth) result.ok = false;
   if (!result.ai.ready) result.ok = false;
   if (!result.realtime.livekit) result.ok = false;
 

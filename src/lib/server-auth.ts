@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { parseBearerToken } from '@/lib/auth-utils';
-import { verifyFirebaseIdToken } from '@/lib/firebase-admin';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export type AuthUser = {
   uid: string;
@@ -19,25 +19,16 @@ export class AuthError extends Error {
   }
 }
 
-type TokenVerifier = (token: string) => Promise<{ uid: string; email?: string; name?: string }>;
+export async function requireUser(_request?: Request): Promise<AuthUser> {
+  const session = await getServerSession(authOptions);
+  const sessionUser = session?.user;
+  if (!sessionUser?.id) throw new AuthError('Authentication required', 401);
 
-export async function requireUser(request: Request, verifier: TokenVerifier = verifyFirebaseIdToken): Promise<AuthUser> {
-  const token = parseBearerToken(request.headers.get('authorization'));
-  if (!token) throw new AuthError('Authentication required', 401);
-
-  try {
-    const decoded = await verifier(token);
-    if (!decoded.uid) throw new AuthError('Invalid authentication token', 401);
-    return {
-      uid: decoded.uid,
-      email: decoded.email ?? null,
-      displayName: decoded.name ?? null,
-    };
-  } catch (error) {
-    if (error instanceof AuthError) throw error;
-    console.warn('Firebase token verification failed');
-    throw new AuthError('Invalid or expired authentication token', 401);
-  }
+  return {
+    uid: sessionUser.id,
+    email: sessionUser.email ?? null,
+    displayName: sessionUser.name ?? null,
+  };
 }
 
 export function requireOwnership(user: AuthUser, ownerId: string) {
