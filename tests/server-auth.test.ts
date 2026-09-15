@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isDemoAuthAllowed, parseBearerToken } from '@/lib/server-auth';
+import { isDemoAuthAllowed, parseBearerToken } from '@/lib/auth-utils';
 
 describe('parseBearerToken', () => {
   it('returns null when authorization is missing', () => {
