@@ -1,11 +1,7 @@
 import 'server-only';
 
 import { getDb } from '@/lib/db';
-import {
-  EXPECTED_SCHEMA_VERSION,
-  REQUIRED_TABLES,
-  evaluateSchemaState,
-} from '@/lib/schema-contract';
+import { evaluateSchemaState } from '@/lib/schema-contract';
 
 export { EXPECTED_SCHEMA_VERSION, REQUIRED_TABLES, evaluateSchemaState } from '@/lib/schema-contract';
 

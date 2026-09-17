@@ -1,54 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Skill Swap
 
-## Getting Started
+Peer skill exchange: Google sign-in, reciprocal matching, messaging, LiveKit calls, AI roadmaps, and analytics. Product data lives in Neon Postgres. Redis rate-limits AI. Avatars use Vercel Blob.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 App Router, React 19, NextAuth Google OAuth
+- Neon Postgres (`db/migrations`)
+- Upstash Redis
+- LiveKit Cloud realtime video
+- NVIDIA primary / OpenRouter fallback for roadmaps
+- Vercel Blob avatars
+
+## Local setup
 
 ```bash
+cp .env.example .env.local
+# Fill DATABASE_URL, Google OAuth, NEXTAUTH_*, LiveKit, AI, and Redis/KV values.
+npm ci
+npm run db:migrate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Sign in with Google, add teach/learn skills, then match, message, and call against live data.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Google redirect URIs:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```text
+http://localhost:3000/api/auth/callback/google
+https://skill-swap-nine-green.vercel.app/api/auth/callback/google
+```
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Local app |
+| `npm run db:migrate` | Apply `db/migrations` to `DATABASE_URL` |
+| `npm run test:run` | Unit tests |
+| `npm run lint` | ESLint |
+| `npm run build` | Production build |
+| `npm run check` | Lint, tests, build |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Vercel builds run `npm run db:migrate && npm run build`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Health
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Production data layer: Neon + Upstash on Vercel
-
-### Neon Postgres
-
-Connect **Neon** to the `skill-swap` Vercel project from the Vercel Marketplace. The native integration injects `DATABASE_URL`. The application reads that variable only on the server through `src/lib/db.ts`.
-
-The production schema is tracked in `db/schema.sql` and contains users, skills, matches, conversations, messages, roadmaps, learning sessions and analytics events.
-
-### Upstash Redis
-
-Connect **Upstash for Redis** to the same Vercel project. The app supports the native `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` variables and Vercel `KV_REST_API_URL` / `KV_REST_API_TOKEN` aliases.
-
-Redis is used for AI-roadmap cache and rate limiting. `/api/health` verifies both Postgres and Redis after deployment.
-
-### Environment
-
-Copy `.env.example` for local development. Never commit `.env.local` or production credentials.
+`GET /api/health` reports database, schema version `002_product_hardening`, Redis, Google OAuth, Blob, LiveKit, and AI. Missing required production services return `503`.

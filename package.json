@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test",
+    "db:migrate": "node scripts/migrate.mjs",
     "check": "npm run lint && npm run test:run && npm run build"
   },
   "dependencies": {

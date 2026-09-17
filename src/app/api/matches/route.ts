@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/http';
+import { matchScoreFromCompatibility } from '@/lib/matching';
 import { requireUser } from '@/lib/server-auth';
 import { ensureUser } from '@/lib/users';
 
@@ -68,9 +69,21 @@ export async function POST(request: Request) {
     if (blocks[0]) return NextResponse.json({ error: 'Match unavailable' }, { status: 403 });
     const existing = await sql`SELECT id, status FROM matches WHERE ((user_a = ${user.uid} AND user_b = ${input.targetUserId}) OR (user_a = ${input.targetUserId} AND user_b = ${user.uid})) AND status IN ('pending','accepted') LIMIT 1`;
     if (existing[0]) return NextResponse.json({ match: existing[0], existing: true });
+    const fit = await sql`
+      SELECT mine.skill_id, count(*)::int AS compatibility
+      FROM user_skills mine
+      JOIN user_skills theirs ON theirs.skill_id = mine.skill_id AND theirs.user_id = ${input.targetUserId}
+      WHERE mine.user_id = ${user.uid}
+        AND ((mine.kind = 'learn' AND theirs.kind = 'teach') OR (mine.kind = 'teach' AND theirs.kind = 'learn'))
+      GROUP BY mine.skill_id
+      ORDER BY compatibility DESC, mine.skill_id
+      LIMIT 1
+    `;
+    const skillId = input.skillId ?? (fit[0] ? Number(fit[0].skill_id) : null);
+    const score = matchScoreFromCompatibility(Number(fit[0]?.compatibility ?? 0));
     const rows = await sql`
       INSERT INTO matches(user_a, user_b, requested_by, skill_id, status, score)
-      VALUES (${user.uid}, ${input.targetUserId}, ${user.uid}, ${input.skillId ?? null}, 'pending', 50)
+      VALUES (${user.uid}, ${input.targetUserId}, ${user.uid}, ${skillId}, 'pending', ${score})
       RETURNING *
     `;
     await sql`INSERT INTO notifications(user_id, type, payload) VALUES (${input.targetUserId}, 'match_request', ${JSON.stringify({ matchId: rows[0].id, fromUserId: user.uid })}::jsonb)`;

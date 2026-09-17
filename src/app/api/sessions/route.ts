@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getDb } from '@/lib/db';
 import { apiError } from '@/lib/http';
+import { liveKitRoomName } from '@/lib/matching';
 import { requireUser } from '@/lib/server-auth';
 
 const SessionSchema = z.object({ matchId: z.string().uuid() }).strict();
@@ -29,22 +30,31 @@ export async function POST(request: Request) {
     const sql = getDb();
     const matches = await sql`
       SELECT m.*,
-        EXISTS(SELECT 1 FROM user_skills us WHERE us.user_id = m.user_a AND us.skill_id = m.skill_id AND us.kind = 'teach') AS a_teaches
+        EXISTS(SELECT 1 FROM user_skills us WHERE us.user_id = m.user_a AND us.skill_id = m.skill_id AND us.kind = 'teach') AS a_teaches,
+        EXISTS(SELECT 1 FROM user_skills us WHERE us.user_id = m.user_b AND us.skill_id = m.skill_id AND us.kind = 'teach') AS b_teaches
       FROM matches m
       WHERE m.id = ${matchId}::uuid AND m.status = 'accepted' AND (m.user_a = ${user.uid} OR m.user_b = ${user.uid}) LIMIT 1
     `;
     const match = matches[0];
     if (!match) return NextResponse.json({ error: 'Accepted match not found' }, { status: 404 });
-    const teacherId = match.a_teaches ? match.user_a : match.user_b;
-    const learnerId = match.a_teaches ? match.user_b : match.user_a;
+    const teacherId = match.a_teaches && !match.b_teaches ? match.user_a : match.b_teaches && !match.a_teaches ? match.user_b : match.user_a;
+    const learnerId = teacherId === match.user_a ? match.user_b : match.user_a;
     const existing = await sql`SELECT * FROM learning_sessions WHERE match_id = ${match.id} AND status IN ('scheduled','active') ORDER BY created_at DESC LIMIT 1`;
-    if (existing[0]) return NextResponse.json({ session: existing[0], existing: true });
+    if (existing[0]) {
+      const session = existing[0];
+      if (!session.livekit_room) {
+        const room = liveKitRoomName(String(session.id));
+        const updated = await sql`UPDATE learning_sessions SET livekit_room = ${room} WHERE id = ${session.id} RETURNING *`;
+        return NextResponse.json({ session: updated[0], existing: true });
+      }
+      return NextResponse.json({ session, existing: true });
+    }
     const rows = await sql`
       INSERT INTO learning_sessions(match_id, teacher_id, learner_id, skill_id, status)
       VALUES (${match.id}, ${teacherId}, ${learnerId}, ${match.skill_id}, 'scheduled')
       RETURNING *
     `;
-    const room = `skillswap-${rows[0].id}`;
+    const room = liveKitRoomName(String(rows[0].id));
     const updated = await sql`UPDATE learning_sessions SET livekit_room = ${room} WHERE id = ${rows[0].id} RETURNING *`;
     return NextResponse.json({ session: updated[0] }, { status: 201 });
   } catch (error) {

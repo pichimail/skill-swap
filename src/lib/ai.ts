@@ -45,7 +45,7 @@ async function callProvider(provider: 'nvidia' | 'openrouter', prompt: string): 
   const apiKey = isNvidia ? process.env.NVIDIA_API_KEY : process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('provider_not_configured');
   const model = isNvidia
-    ? process.env.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct'
+    ? process.env.NVIDIA_MODEL || 'nvidia/nemotron-3.5-lightning-30b-a3b'
     : process.env.OPENROUTER_MODEL || 'openrouter/auto';
 
   const headers: Record<string, string> = {};

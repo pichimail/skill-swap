@@ -10,6 +10,25 @@ const ActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('report'), reason: z.string().trim().min(2).max(1000) }),
 ]);
 
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await requireUser(request);
+    const { id } = await context.params;
+    const sql = getDb();
+    const rows = await sql`
+      SELECT ls.*, s.name AS skill_name
+      FROM learning_sessions ls
+      LEFT JOIN skills s ON s.id = ls.skill_id
+      WHERE ls.id = ${id}::uuid AND (ls.teacher_id = ${user.uid} OR ls.learner_id = ${user.uid})
+      LIMIT 1
+    `;
+    if (!rows[0]) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    return NextResponse.json({ session: rows[0] });
+  } catch (error) {
+    return apiError(error, 'Unable to load session');
+  }
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(request);
@@ -40,7 +59,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     await sql`INSERT INTO moderation_events(session_id, actor_id, event_type, metadata) VALUES (${session.id}, ${user.uid}, 'user_report', ${JSON.stringify({ reason: input.reason })}::jsonb)`;
-    await sql`UPDATE learning_sessions SET status = 'cancelled', ended_at = COALESCE(ended_at, now()), ended_reason = 'user_report' WHERE id = ${session.id}`;
+    await sql`
+      UPDATE learning_sessions SET
+        status = 'cancelled',
+        ended_at = COALESCE(ended_at, now()),
+        duration_seconds = CASE WHEN started_at IS NULL THEN 0 ELSE GREATEST(0, EXTRACT(EPOCH FROM (now() - started_at))::int) END,
+        ended_reason = 'user_report'
+      WHERE id = ${session.id}
+    `;
     return NextResponse.json({ ok: true });
   } catch (error) {
     return apiError(error, 'Unable to update session');
